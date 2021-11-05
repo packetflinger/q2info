@@ -34,7 +34,7 @@ func main() {
 
 	lines := strings.Split(strings.Trim(string(p), " \n\t"), "\n")
 	PrintServerVars(lines[1][1:])
-	PrintPlayerInfo(lines[2 : len(lines)-1])
+	PrintPlayerInfo(lines[2:len(lines)-1])
 }
 
 func PrintServerVars(s string) {
