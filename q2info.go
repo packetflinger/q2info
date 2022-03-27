@@ -10,7 +10,16 @@ import (
 )
 
 func main() {
+	if len(os.Args) < 2 {
+		fmt.Printf("Usage: %s <server_ip[:port]>\n", os.Args[0])
+		return
+	}
+
 	server := os.Args[1]
+	if !strings.Contains(server, ":") {
+		server = server + ":27910"
+	}
+
 	p := make([]byte, 1500)
 
 	// only use IPv4
@@ -34,7 +43,7 @@ func main() {
 
 	lines := strings.Split(strings.Trim(string(p), " \n\t"), "\n")
 	PrintServerVars(lines[1][1:])
-	PrintPlayerInfo(lines[2:len(lines)-1])
+	PrintPlayerInfo(lines[2 : len(lines)-1])
 }
 
 func PrintServerVars(s string) {
