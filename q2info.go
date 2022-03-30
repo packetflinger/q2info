@@ -15,7 +15,11 @@ import (
 func main() {
 	// no args given, show usage
 	if len(os.Args) < 2 {
-		fmt.Printf("Usage: %s <server_ip[:port]>\n", os.Args[0])
+		fmt.Printf("Usage: %s <server_ip[:port]> [keylookup]\n", os.Args[0])
+		fmt.Printf("  ex: %s 192.0.2.45:27911\n", os.Args[0])
+		fmt.Printf("  ex: %s frag.gr:27940\n", os.Args[0])
+		fmt.Printf("  ex: %s nj.packetflinger.com\n", os.Args[0])
+		fmt.Printf("  ex: %s tastyspleen.net:27916 players\n", os.Args[0])
 		return
 	}
 
