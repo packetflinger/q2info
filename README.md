@@ -45,3 +45,5 @@ $ ./q2info 86.105.53.128:27910 hostname
 PacketFlinger.com ~ OpenTDM ~ Germany
 ```
 
+## Compiling
+`$ go build .`
