@@ -9,7 +9,11 @@ import (
 	"time"
 )
 
+/**
+ * Start here
+ */
 func main() {
+	// no args given, show usage
 	if len(os.Args) < 2 {
 		fmt.Printf("Usage: %s <server_ip[:port]>\n", os.Args[0])
 		return
@@ -18,6 +22,12 @@ func main() {
 	server := os.Args[1]
 	if !strings.Contains(server, ":") {
 		server = server + ":27910"
+	}
+
+	// user included a specific value to get
+	lookup := ""
+	if len(os.Args) == 3 {
+		lookup = os.Args[2]
 	}
 
 	p := make([]byte, 1500)
@@ -42,31 +52,61 @@ func main() {
 	}
 
 	lines := strings.Split(strings.Trim(string(p), " \n\t"), "\n")
-	PrintServerVars(lines[1][1:])
-	PrintPlayerInfo(lines[2 : len(lines)-1])
-}
+	info := ParseServerinfo(lines)
 
-func PrintServerVars(s string) {
-	vars := strings.Split(s, "\\")
-	for i := 0; i < len(vars); i++ {
-		fmt.Printf("%s: ", vars[i])
-		i++
-		fmt.Printf("%s\n", vars[i])
+	if lookup != "" {
+		PrintSpecificVar(info, lookup)
+	} else {
+		PrintServerVars(info)
 	}
 }
 
-func PrintPlayerInfo(s []string) {
-	playerscount := len(s)
+/**
+ * Load the backslash delimited infostring into a key value map
+ */
+func ParseServerinfo(s []string) map[string]string {
+	serverinfo := s[1][1:]
+	playerinfo := s[2 : len(s)-1]
 
-	fmt.Println("player_count:", playerscount)
+	info := map[string]string{}
+	vars := strings.Split(serverinfo, "\\")
 
-	if playerscount > 0 {
+	for i := 0; i < len(vars); i += 2 {
+		info[strings.ToLower(vars[i])] = vars[i+1]
+	}
+
+	playercount := len(playerinfo)
+	info["player_count"] = fmt.Sprintf("%d", playercount)
+
+	if playercount > 0 {
 		players := ""
-		for _, p := range s {
+
+		for _, p := range playerinfo {
 			player := strings.SplitN(p, " ", 3)
 			players = fmt.Sprintf("%s,%s", players, player[2])
 		}
 
-		fmt.Println("players:", players[1:])
+		info["players"] = players[1:]
+	}
+	return info
+}
+
+/**
+ * Just spit everything to stdout
+ */
+func PrintServerVars(info map[string]string) {
+	for k, v := range info {
+		fmt.Printf("%s: %s\n", k, v)
+	}
+}
+
+/**
+ * Print out only the value for the given key
+ */
+func PrintSpecificVar(info map[string]string, lookup string) {
+	for k, v := range info {
+		if k == strings.ToLower(lookup) {
+			fmt.Printf("%s\n", v)
+		}
 	}
 }
