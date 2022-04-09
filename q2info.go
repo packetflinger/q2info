@@ -15,17 +15,31 @@ import (
 func main() {
 	// no args given, show usage
 	if len(os.Args) < 2 {
-		fmt.Printf("Usage: %s <server_ip[:port]> [keylookup]\n", os.Args[0])
+		fmt.Printf("Usage: %s <server_ip[:port]|alias> [keylookup]\n", os.Args[0])
 		fmt.Printf("  ex: %s 192.0.2.45:27911\n", os.Args[0])
 		fmt.Printf("  ex: %s frag.gr:27940\n", os.Args[0])
 		fmt.Printf("  ex: %s nj.packetflinger.com\n", os.Args[0])
 		fmt.Printf("  ex: %s tastyspleen.net:27916 players\n", os.Args[0])
+		fmt.Printf("  ex: %s dmsrv player_count\n", os.Args[0])
 		return
 	}
 
+	aliases := map[string]string{}
+
+	dirname, err := os.UserHomeDir()
+	if err == nil {
+		aliasfile := fmt.Sprintf("%s/.q2info", dirname)
+		aliases = LoadAliases(aliasfile)
+	}
+
 	server := os.Args[1]
-	if !strings.Contains(server, ":") {
-		server = server + ":27910"
+	alias := aliases[server]
+	if alias == "" {
+		if !strings.Contains(server, ":") {
+			server = server + ":27910"
+		}
+	} else {
+		server = alias
 	}
 
 	// user included a specific value to get
@@ -39,7 +53,7 @@ func main() {
 	// only use IPv4
 	conn, err := net.Dial("udp4", server)
 	if err != nil {
-		fmt.Printf("Connection error %v", err)
+		fmt.Printf("Connection error %v\n", err)
 		return
 	}
 	defer conn.Close()
@@ -93,6 +107,28 @@ func ParseServerinfo(s []string) map[string]string {
 		info["players"] = players[1:]
 	}
 	return info
+}
+
+/**
+ * You can store a file of key-value pairs mapping names to server ip:ports
+ */
+func LoadAliases(aliasfile string) map[string]string {
+	raw, err := os.ReadFile(aliasfile)
+	if err != nil {
+		return map[string]string{}
+	}
+
+	aliases := map[string]string{}
+	lines := strings.Split(string(raw), "\n")
+	for _, line := range lines {
+		if line == "" {
+			continue
+		}
+		alias := strings.Fields(line)
+		aliases[alias[0]] = alias[1]
+	}
+
+	return aliases
 }
 
 /**
