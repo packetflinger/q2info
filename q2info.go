@@ -121,9 +121,19 @@ func LoadAliases(aliasfile string) map[string]string {
 	aliases := map[string]string{}
 	lines := strings.Split(string(raw), "\n")
 	for _, line := range lines {
-		if strings.TrimSpace(line) == "" {
+		trimmedline := strings.TrimSpace(line)
+		if trimmedline == "" {
 			continue
 		}
+
+		if strings.HasPrefix(trimmedline, "#") {
+			continue
+		}
+
+		if strings.HasPrefix(trimmedline, "//") {
+			continue
+		}
+
 		alias := strings.Fields(line)
 		aliases[alias[0]] = alias[1]
 	}
