@@ -8,6 +8,7 @@ import (
 	"log"
 	"net"
 	"os"
+	"sort"
 	"strings"
 	"time"
 )
@@ -139,11 +140,17 @@ func ParseServerinfo(s []string) map[string]string {
 }
 
 //
-// Just spit everything to stdout
+// Just spit everything to stdout after sorting
 //
 func PrintServerVars(info map[string]string) {
-	for k, v := range info {
-		fmt.Printf("%s: %s\n", k, v)
+	keys := make([]string, 0, len(info))
+	for k := range info {
+		keys = append(keys, k)
+	}
+	sort.Strings(keys)
+
+	for _, k := range keys {
+		fmt.Printf("%s: %s\n", k, info[k])
 	}
 }
 
