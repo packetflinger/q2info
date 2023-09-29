@@ -1,213 +1,126 @@
 package main
 
 import (
-	"bufio"
-	"encoding/json"
+	"errors"
 	"flag"
 	"fmt"
 	"log"
-	"net"
 	"os"
-	"sort"
+	"strconv"
 	"strings"
-	"time"
-)
 
-//
-// Structure to hold our config file ~/.q2servers.json
-// This is a small subset of the data in that file,
-// just what we need to perform our duty
-//
-type ServerJSON struct {
-	Servers []struct {
-		Name string `JSON:"name"`
-		Addr string `JSON:"addr"`
-	} `JSON:"servers"`
-}
-
-const (
-	DefaultPort = ":27910"
+	pb "github.com/packetflinger/libq2/proto"
+	"github.com/packetflinger/libq2/state"
+	"google.golang.org/protobuf/encoding/prototext"
 )
 
 var (
-	Config  ServerJSON
-	SrvFile *string // flag
-	Verbose *bool   // flag
+	serversFile = ".q2servers.config" // default name, should be in home directory
+	config      = flag.String("config", "", "Specify a server data file")
+	property    = flag.String("property", "", "Output only this specific server var")
 )
 
-//
-// init() is called before this
-//
 func main() {
-	server := GetServer(flag.Arg(0))
-
-	// user included a specific value to get
-	lookup := ""
-	if len(flag.Args()) == 2 {
-		lookup = flag.Arg(1)
-	}
-
-	p := make([]byte, 1500)
-
-	if *Verbose {
-		log.Printf("Connecting to %s\n", server)
-	}
-
-	// only use IPv4
-	conn, err := net.Dial("udp4", server)
-	if err != nil {
-		fmt.Printf("Connection error %v\n", err)
-		return
-	}
-	defer conn.Close()
-	conn.SetReadDeadline(time.Now().Add(1 * time.Second))
-
-	cmd := []byte{0xff, 0xff, 0xff, 0xff}
-	cmd = append(cmd, "status"...)
-
-	starttime := time.Now()
-	fmt.Fprintln(conn, string(cmd))
-	_, err = bufio.NewReader(conn).Read(p)
-	duration := time.Since(starttime)
-
-	if err != nil {
-		fmt.Println("Read error:", err)
-		return
-	}
-
-	lines := strings.Split(strings.Trim(string(p), " \n\t"), "\n")
-	info := ParseServerinfo(lines)
-
-	if lookup != "" {
-		PrintSpecificVar(info, lookup)
-	} else {
-		PrintServerVars(info)
-	}
-
-	if *Verbose {
-		log.Printf("Results fetched in %s\n", duration.String())
-	}
-}
-
-//
-// Either locate the server reference in the config file or assume
-// it was given manually at runtime and format it properly with
-// a port
-//
-func GetServer(alias string) string {
-	for _, s := range Config.Servers {
-		if strings.EqualFold(s.Name, alias) {
-			return s.Addr
-		}
-	}
-
-	// not found in config file, assuming arg is the address
-	if !strings.Contains(alias, ":") {
-		alias = alias + DefaultPort
-	}
-
-	return alias
-}
-
-//
-// Load the backslash delimited infostring into a key value map
-//
-func ParseServerinfo(s []string) map[string]string {
-	serverinfo := s[1][1:]
-	playerinfo := s[2 : len(s)-1]
-
-	info := map[string]string{}
-	vars := strings.Split(serverinfo, "\\")
-
-	for i := 0; i < len(vars); i += 2 {
-		info[strings.ToLower(vars[i])] = vars[i+1]
-	}
-
-	playercount := len(playerinfo)
-	info["player_count"] = fmt.Sprintf("%d", playercount)
-
-	if playercount > 0 {
-		players := ""
-
-		for _, p := range playerinfo {
-			player := strings.SplitN(p, " ", 3)
-			players = fmt.Sprintf("%s,%s", players, player[2])
-		}
-
-		info["players"] = players[1:]
-	}
-	return info
-}
-
-//
-// Just spit everything to stdout after sorting
-//
-func PrintServerVars(info map[string]string) {
-	keys := make([]string, 0, len(info))
-	for k := range info {
-		keys = append(keys, k)
-	}
-	sort.Strings(keys)
-
-	for _, k := range keys {
-		fmt.Printf("%s: %s\n", k, info[k])
-	}
-}
-
-//
-// Print out only the value for the given key
-//
-func PrintSpecificVar(info map[string]string, lookup string) {
-	for k, v := range info {
-		if strings.EqualFold(k, lookup) {
-			fmt.Printf("%s\n", v)
-		}
-	}
-}
-
-//
-// Called before main()
-//
-func init() {
-
-	// parse args
-	SrvFile = flag.String("c", "", "Specify a server data file")
-	Verbose = flag.Bool("v", false, "Show some more info")
 	flag.Parse()
-
-	if len(flag.Args()) < 1 {
-		fmt.Printf("Usage: %s <flags> <serveralias> [property]\n", os.Args[0])
-		fmt.Printf("  flags:\n")
-		flag.PrintDefaults()
-		fmt.Println("  [property] is optional and can be any one key value returned")
-		fmt.Println("    ex: players, hostname, dmflags")
-		os.Exit(0)
+	if len(flag.Args()) == 0 {
+		showUsage()
+		return
 	}
 
-	if *SrvFile == "" {
+	serverspb, err := loadConfig()
+	if err != nil {
+		log.Println(err)
+		return
+	}
+
+	addr, port, err := resolveTarget(serverspb, flag.Arg(0))
+	if err != nil {
+		log.Println(err)
+		return
+	}
+
+	server := state.Server{
+		Address: addr,
+		Port:    port,
+	}
+	info, err := server.FetchInfo()
+	if err != nil {
+		log.Println(err)
+		return
+	}
+
+	outputInfo(info, *property)
+}
+
+// if no args are supplied
+func showUsage() {
+	fmt.Printf("Usage: %s <flags> <serveralias>\n", os.Args[0])
+	fmt.Printf("  flags:\n")
+	flag.PrintDefaults()
+}
+
+// Read the text-format proto config file and unmarshal it
+func loadConfig() (*pb.ServerFile, error) {
+	cfg := &pb.ServerFile{}
+
+	if *config == "" {
 		homedir, err := os.UserHomeDir()
 		sep := os.PathSeparator
 		if err != nil {
-			log.Fatal(err)
+			return nil, err
 		}
-		*SrvFile = fmt.Sprintf("%s%c.q2servers.json", homedir, sep)
+		*config = fmt.Sprintf("%s%c%s", homedir, sep, serversFile)
 	}
 
-	if *Verbose {
-		log.Printf("Loading passwords/servers from %s\n", *SrvFile)
-	}
-
-	raw, err := os.ReadFile(*SrvFile)
+	raw, err := os.ReadFile(*config)
 	if err != nil {
-		log.Fatal(err)
+		return nil, err
 	}
 
-	err = json.Unmarshal(raw, &Config)
+	err = prototext.Unmarshal(raw, cfg)
 	if err != nil {
-		log.Fatal(err)
+		return nil, err
+	}
+	return cfg, nil
+}
+
+// Attempt to match the target arg to an identifier in the server config.
+// If an exact match isn't found, assume it's a literal address instead of
+// an alias.
+//
+// Returns the ip/host, port, and any errors
+func resolveTarget(cfg *pb.ServerFile, targ string) (string, int, error) {
+	found := ""
+	for _, sv := range cfg.GetServer() {
+		if sv.GetIdentifier() == strings.ToLower(targ) {
+			found = sv.GetAddress()
+		}
 	}
 
-	if *Verbose {
-		log.Printf("  %d servers found\n", len(Config.Servers))
+	// we didn't match anything, assume the alias is just a server address
+	if found == "" {
+		found = targ
+	}
+
+	tokens := strings.Split(found, ":")
+	if len(tokens) == 2 {
+		ip := tokens[0]
+		port, err := strconv.Atoi(tokens[1])
+		if err != nil {
+			return "", 0, errors.New("malformed server address, bad port - " + found)
+		}
+		return ip, port, nil
+	}
+	return "", 0, errors.New("invalid address, no port specified - " + found)
+}
+
+// Display the data we found.
+func outputInfo(info state.ServerInfo, property string) {
+	if property != "" {
+		fmt.Println(info.Server[property])
+	} else {
+		for k, v := range info.Server {
+			fmt.Printf("%s: %s\n", k, v)
+		}
 	}
 }

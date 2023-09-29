@@ -2,44 +2,29 @@
 A command line tool for getting Quake 2 server information.
 
 ## Usage
-`q2info [-v] [-c <config_file>] <server|ip[:port]> [lookup]`
+`q2info [--config <config_file>] [--property <server_var>] <alias|ip:port>`
 
-The server can either be an alias listed in a config file or an IPv4 address or DNS name. If not using an alias, the `:port` is optional, if not supplied the default Quake 2 port of `27910` will be used. The `lookup` value is optional and gives you an easy way to get a single value. If `lookup` is omitted, all the available server info variables will be displayed.
+The server can either be an alias listed in a config file or an IPv4/DNS address + port. The `lookup` value is optional and gives you an easy way to get a single value. If `lookup` is omitted, all the available server info variables will be displayed.
 
 ## Config File
-Server aliases are loaded from a file named `.q2servers.json` in your home directory by default. You can override this name and path with the `-c` argument. 
+Server aliases are loaded from a text-format protobuf file named `.q2servers.config` in your home directory by default. You can override this name and path with the `--config` flag.
 
-The `.q2servers.json` file format:
+The proto file this config implements is https://github.com/packetflinger/libq2/proto/servers_file.proto
+
+The `.q2servers.config` file format used by this program is a small subset of the `servers_file.proto` file. The bare minimum required for q2info is as follows:
 
 ```
-{
-  "passwords": [
-    {
-      "name": "pass1",
-      "password": "thisisareallybadpassword"
-    },
-    {
-      "name": "pass2",
-      "password": "ca00b050-495b-11ed-93de-cb7ecce5017d"
-    }
-  ],
-  "servers": [
-    {
-      "name": "server1",
-      "groups": "deathmatch usa",
-      "addr": "100.64.3.5:27910",
-      "password": "pass2"
-    },
-    {
-      "name": "server2",
-      "groups": "rocketarena usa",
-      "addr": "192.0.2.44:27919",
-      "password": "pass1"
-    },
-  ]
+# Add a server stanza for each server
+server {
+  name: "server1"
+  address: "192.0.2.33:27988"
 }
-```
-This file format is shared with other tools (like q2rcon) and has more infomation than is necessary for this program. The only required data for q2info is the `servers` array with each entry having a `name` and `addr`. You can supply the hostname/ip and port at the commandline directly if you like. 
+
+server {
+  name: "server2"
+  address: "q2.example.com:27910"
+}
+``` 
 
 ## Examples
 ```
@@ -71,14 +56,22 @@ player_count: 7
 score_b: 42
 ```
 ```
-$ ./q2info server2 player_count
+$ ./q2info --property=player_count server2
 7
 ```
 
 ```
-$ ./q2info 86.105.53.128:27910 hostname
+$ ./q2info --property=hostname 86.105.53.128:27910
 PacketFlinger.com ~ OpenTDM ~ Germany
 ```
 
+## Dependencies
+```
+$ go get google.golang.org/protobuf
+$ go get github.com/packetflinger/libq2 
+```
+
 ## Compiling
-`$ go build .`
+```
+$ go build .
+```
