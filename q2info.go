@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"sort"
 	"strconv"
 	"strings"
 
@@ -119,8 +120,13 @@ func outputInfo(info state.ServerInfo, property string) {
 	if property != "" {
 		fmt.Println(info.Server[property])
 	} else {
-		for k, v := range info.Server {
-			fmt.Printf("%s: %s\n", k, v)
+		var keys []string
+		for k, _ := range info.Server {
+			keys = append(keys, k)
+		}
+		sort.Strings(keys)
+		for _, k := range keys {
+			fmt.Printf("%s: %s\n", k, info.Server[k])
 		}
 	}
 }
