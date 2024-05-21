@@ -92,7 +92,7 @@ func loadConfig() (*pb.ServerFile, error) {
 func resolveTarget(cfg *pb.ServerFile, targ string) (string, int, error) {
 	found := ""
 	for _, sv := range cfg.GetServer() {
-		if sv.GetIdentifier() == strings.ToLower(targ) {
+		if strings.EqualFold(sv.GetIdentifier(), targ) {
 			found = sv.GetAddress()
 		}
 	}
